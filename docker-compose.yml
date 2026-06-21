@@ -1,0 +1,88 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: kanban-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: auth_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d auth_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mongo:
+    image: mongo:7
+    container_name: kanban-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  auth-service:
+    build: ./auth-service
+    container_name: kanban-auth-service
+    environment:
+      PORT: 4000
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/auth_db
+      JWT_SECRET: your_secret_key
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "4000:4000"
+
+  task-service:
+    build: ./task-service
+    container_name: kanban-task-service
+    environment:
+      PORT: 5000
+      MONGO_URI: mongodb://mongo:27017/tasks_db
+      JWT_SECRET: your_secret_key
+    depends_on:
+      mongo:
+        condition: service_healthy
+    ports:
+      - "5000:5000"
+
+  db-admin:
+    build: ./db-admin
+    container_name: kanban-db-admin
+    environment:
+      PORT: 8082
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/auth_db
+      MONGO_URI: mongodb://mongo:27017/tasks_db
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+    ports:
+      - "8082:8082"
+
+  frontend:
+    build:
+      context: .
+      args:
+        VITE_AUTH_API_URL: http://localhost:4000
+        VITE_TASK_API_URL: http://localhost:5000
+    container_name: kanban-frontend
+    depends_on:
+      - auth-service
+      - task-service
+    ports:
+      - "5173:80"
+
+volumes:
+  postgres_data:
+  mongo_data:

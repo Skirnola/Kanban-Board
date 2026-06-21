@@ -1,0 +1,8 @@
+node_modules
+dist
+.git
+*.log
+.auth-service/node_modules
+auth-service/node_modules
+task-service/node_modules
+db-admin/node_modules
